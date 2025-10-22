@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>JavaScript Drum Kit</title>
+  <style>
+    :root{--bg:#0f1724;--panel:#0b1220;--accent:#ff6b6b;--muted:#94a3b8}
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial}
+    body{background:linear-gradient(180deg, #071024 0%, var(--bg) 100%);color:#e6eef8;display:flex;align-items:center;justify-content:center;padding:2rem}
+    .wrap{max-width:980px;width:100%;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:26px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    header{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+    header h1{font-size:1.25rem;margin:0}
+    header p{margin:0;color:var(--muted);font-size:0.9rem}
+
+    .keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
+    .key{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.04);padding:18px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;user-select:none;transition:transform 120ms ease, box-shadow 120ms ease}
+    .key:active,.key.active{transform:translateY(4px) scale(0.995);box-shadow:inset 0 -6px 18px rgba(0,0,0,0.5)}
+    .key kbd{display:inline-block;background:rgba(255,255,255,0.06);padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.03);font-weight:700;font-size:0.95rem}
+    .key .label{margin-top:10px;font-size:0.95rem;color:var(--muted);text-align:center}
+
+    .controls{display:flex;gap:12px;align-items:center;margin-top:16px}
+    .controls label{font-size:0.9rem;color:var(--muted)}
+    .slider{appearance:none;width:160px}
+
+    footer{margin-top:16px;color:var(--muted);font-size:0.85rem}
+
+    @media(max-width:420px){.key{padding:14px}} 
+  </style>
+</head>
+<body>
+  <div class="wrap" role="application" aria-label="Drum kit">
+    <header>
+      <div>
+        <h1>JavaScript Drum Kit</h1>
+        <p>Click the pads or press the keys shown. Uses Web Audio API (no external audio files).</p>
+      </div>
+    </header>
+
+    <main>
+      <div class="keys">
+        <button class="key" data-sound="kick" data-key="A" aria-pressed="false">
+          <kbd>A</kbd>
+          <div class="label">Kick</div>
+        </button>
+        <button class="key" data-sound="snare" data-key="S" aria-pressed="false">
+          <kbd>S</kbd>
+          <div class="label">Snare</div>
+        </button>
+        <button class="key" data-sound="hihat" data-key="D" aria-pressed="false">
+          <kbd>D</kbd>
+          <div class="label">Hi‑Hat</div>
+        </button>
+        <button class="key" data-sound="tom" data-key="F" aria-pressed="false">
+          <kbd>F</kbd>
+          <div class="label">Tom</div>
+        </button>
+        <button class="key" data-sound="clap" data-key="G" aria-pressed="false">
+          <kbd>G</kbd>
+          <div class="label">Clap</div>
+        </button>
+        <button class="key" data-sound="cowbell" data-key="H" aria-pressed="false">
+          <kbd>H</kbd>
+          <div class="label">Cowbell</div>
+        </button>
+      </div>
+
+      <div class="controls">
+        <label for="volume">Master Volume</label>
+        <input id="volume" class="slider" type="range" min="0" max="1" step="0.01" value="0.8" />
+        <button id="metronome">Start Metronome</button>
+      </div>
+
+      <footer>Tip: press A S D F G H or click the pads. This example synthesizes percussion using the Web Audio API so it works offline in modern browsers.</footer>
+    </main>
+  </div>
+
+  <script>
+    // Simple drum synth using Web Audio API (no samples)
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let ctx = null; // create on first interaction (autoplay policy)
+    const master = {gain:0.8};
+
+    function ensureCtx(){
+      if(!ctx){
+        ctx = new AudioCtx();
+        ctx.master = ctx.createGain();
+        ctx.master.gain.value = master.gain;
+        ctx.master.connect(ctx.destination);
+      }
+    }
+
+    // utility: white noise buffer
+    function createNoiseBuffer(){
+      const bufferSize = ctx.sampleRate * 1.0; // 1 second
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for(let i=0;i<bufferSize;i++) data[i] = Math.random()*2-1;
+      return buffer;
+    }
+
+    function playKick(time=0){
+      ensureCtx();
+      const now = ctx.currentTime + time;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(150, now);
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+      gain.gain.setValueAtTime(1, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.master);
+      osc.start(now); osc.stop(now + 0.5);
+    }
+
+    function playSnare(time=0){
+      ensureCtx();
+      const now = ctx.currentTime + time;
+      // noise burst
+      const noise = ctx.createBufferSource();
+      noise.buffer = createNoiseBuffer();
+      const noiseFilter = ctx.createBiquadFilter();
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.value = 2000;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(1, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(ctx.master);
+      noise.start(now); noise.stop(now + 0.25);
+      // body tone
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(180, now);
+      oscGain.gain.setValueAtTime(0.7, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.connect(oscGain); oscGain.connect(ctx.master);
+      osc.start(now); osc.stop(now + 0.2);
+    }
+
+    function playHiHat(time=0){
+      ensureCtx();
+      const now = ctx.currentTime + time;
+      const bufferSrc = ctx.createBufferSource();
+      const buffer = createNoiseBuffer();
+      bufferSrc.buffer = buffer;
+      const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=7000;
+      const hp2 = ctx.createBiquadFilter(); hp2.type='bandpass'; hp2.frequency.value=9000; hp2.Q=1;
+      const gain = ctx.createGain(); gain.gain.setValueAtTime(0.0001, now); gain.gain.linearRampToValueAtTime(0.7, now+0.001); gain.gain.exponentialRampToValueAtTime(0.001, now+0.08);
+      bufferSrc.connect(hp); hp.connect(hp2); hp2.connect(gain); gain.connect(ctx.master);
+      bufferSrc.start(now); bufferSrc.stop(now+0.12);
+    }
+
+    function playTom(time=0){
+      ensureCtx();
+      const now = ctx.currentTime + time;
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type='sine'; osc.frequency.setValueAtTime(300, now); osc.frequency.exponentialRampToValueAtTime(180, now+0.25);
+      gain.gain.setValueAtTime(0.8, now); gain.gain.exponentialRampToValueAtTime(0.001, now+0.5);
+      osc.connect(gain); gain.connect(ctx.master);
+      osc.start(now); osc.stop(now+0.6);
+    }
+
+    function playClap(time=0){
+      ensureCtx();
+      const now = ctx.currentTime + time;
+      const buffer = createNoiseBuffer();
+      const parts = [0,0.03,0.06];
+      parts.forEach((offset,i)=>{
+        const src = ctx.createBufferSource(); src.buffer = buffer;
+        const fl = ctx.createBiquadFilter(); fl.type='bandpass'; fl.frequency.value = 1500;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.6/(i+1), now+offset); g.gain.exponentialRampToValueAtTime(0.001, now+offset+0.12);
+        src.connect(fl); fl.connect(g); g.connect(ctx.master);
+        src.start(now+offset); src.stop(now+offset+0.14);
+      });
+    }
+
+    function playCowbell(time=0){
+      ensureCtx();
+      const now = ctx.currentTime + time;
+      const osc1 = ctx.createOscillator(); const osc2 = ctx.createOscillator(); const gain = ctx.createGain();
+      osc1.type='square'; osc2.type='sine';
+      osc1.frequency.value = 1200; osc2.frequency.value = 1800;
+      gain.gain.setValueAtTime(0.7, now); gain.gain.exponentialRampToValueAtTime(0.001, now+0.18);
+      osc1.connect(gain); osc2.connect(gain); gain.connect(ctx.master);
+      osc1.start(now); osc2.start(now); osc1.stop(now+0.18); osc2.stop(now+0.18);
+    }
+
+    const soundMap = {
+      kick: playKick,
+      snare: playSnare,
+      hihat: playHiHat,
+      tom: playTom,
+      clap: playClap,
+      cowbell: playCowbell
+    };
+
+    // UI wiring
+    const keys = Array.from(document.querySelectorAll('.key'));
+    keys.forEach(k=>{
+      k.addEventListener('mousedown', e=>trigger(k.dataset.sound));
+      k.addEventListener('touchstart', e=>{ e.preventDefault(); trigger(k.dataset.sound); });
+    });
+
+    function trigger(name){
+      // visual
+      const btn = document.querySelector(`.key[data-sound="${name}"]`);
+      if(btn){
+        btn.classList.add('active'); btn.setAttribute('aria-pressed','true');
+        setTimeout(()=>{btn.classList.remove('active'); btn.setAttribute('aria-pressed','false');},120);
+      }
+      // audio
+      const fn = soundMap[name]; if(fn) fn();
+    }
+
+    // keyboard support
+    window.addEventListener('keydown', (e)=>{
+      if(e.repeat) return; // ignore holding repeat
+      const key = e.key.toUpperCase();
+      const el = document.querySelector(`.key[data-key="${key}"]`);
+      if(el){ trigger(el.dataset.sound); }
+    });
+
+    // volume control
+    const vol = document.getElementById('volume');
+    vol.addEventListener('input', ()=>{
+      ensureCtx(); ctx.master.gain.value = Number(vol.value);
+    });
+
+    // metronome example
+    let metroId = null; let bpm = 90;
+    document.getElementById('metronome').addEventListener('click', (e)=>{
+      ensureCtx();
+      if(metroId){ clearInterval(metroId); metroId = null; e.target.textContent='Start Metronome'; return; }
+      const interval = 60000 / bpm; e.target.textContent='Stop Metronome';
+      metroId = setInterval(()=>{
+        // simple click using hi-hat
+        playHiHat();
+      }, interval);
+    });
+
+    // unlock audio on first interaction for some browsers
+    ['touchstart','mousedown','keydown'].forEach(ev=>{
+      window.addEventListener(ev, function unlock(){
+        if(!ctx) ensureCtx();
+        window.removeEventListener(ev, unlock);
+      });
+    });
+
+  </script>
+</body>
+</html>

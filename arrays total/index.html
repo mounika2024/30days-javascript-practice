@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Todo Array Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 20px; }
+    input { padding: 8px; width: 300px; }
+    button { padding: 8px; }
+    ul { margin-top: 12px; }
+    li.completed { text-decoration: line-through; color: gray; }
+  </style>
+</head>
+<body>
+  <h1>Todo Array Demo</h1>
+  <input id="taskInput" placeholder="New task..." />
+  <button id="addBtn">Add</button>
+  <button id="clearCompleted">Clear Completed</button>
+  <ul id="list"></ul>
+
+  <script>
+    // --- Model: array of todo items ---
+    // Each item: { id: string, text: string, done: boolean, created: timestamp }
+    const TODOS_KEY = 'todos-demo-v1';
+    let todos = loadTodos();
+
+    // DOM refs
+    const input = document.getElementById('taskInput');
+    const addBtn = document.getElementById('addBtn');
+    const list = document.getElementById('list');
+    const clearBtn = document.getElementById('clearCompleted');
+
+    // initial render
+    render();
+
+    // add new todo
+    addBtn.addEventListener('click', () => {
+      const text = input.value.trim();
+      if (!text) return;
+      const item = {
+        id: cryptoRandomId(),
+        text,
+        done: false,
+        created: Date.now()
+      };
+      todos.push(item);            // push => add
+      saveTodos();
+      input.value = '';
+      render();
+    });
+
+    // clear completed
+    clearBtn.addEventListener('click', () => {
+      // filter => keep only items not done (non-mutating rule)
+      todos = todos.filter(t => !t.done);
+      saveTodos();
+      render();
+    });
+
+    // delegate clicks on list (event delegation)
+    list.addEventListener('click', (e) => {
+      const id = e.target.closest('li')?.dataset?.id;
+      if (!id) return;
+      if (e.target.matches('.toggle')) {
+        toggleTodo(id);
+      } else if (e.target.matches('.delete')) {
+        deleteTodo(id);
+      }
+    });
+
+    // toggle done
+    function toggleTodo(id) {
+      // map => create new array where target toggled
+      todos = todos.map(t => t.id === id ? {...t, done: !t.done} : t);
+      saveTodos();
+      render();
+    }
+
+    // delete todo using splice or filter
+    function deleteTodo(id) {
+      todos = todos.filter(t => t.id !== id);
+      saveTodos();
+      render();
+    }
+
+    // render list (simple DOM)
+    function render() {
+      list.innerHTML = '';
+      // sort by created desc, then render
+      const ordered = [...todos].sort((a,b) => b.created - a.created);
+      for (const t of ordered) {
+        const li = document.createElement('li');
+        li.dataset.id = t.id;
+        li.className = t.done ? 'completed' : '';
+        li.innerHTML = `
+          <input class="toggle" type="checkbox" ${t.done ? 'checked' : ''}/>
+          <span>${escapeHtml(t.text)}</span>
+          <button class="delete">Delete</button>
+        `;
+        list.appendChild(li);
+      }
+    }
+
+    // persistence
+    function saveTodos(){
+      localStorage.setItem(TODOS_KEY, JSON.stringify(todos));
+    }
+    function loadTodos(){
+      try {
+        return JSON.parse(localStorage.getItem(TODOS_KEY)) || [];
+      } catch {
+        return [];
+      }
+    }
+
+    // small helpers
+    function cryptoRandomId(){
+      return Math.random().toString(36).slice(2,9);
+    }
+    function escapeHtml(str){
+      return str.replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+    }
+  </script>
+</body>
+</html>
