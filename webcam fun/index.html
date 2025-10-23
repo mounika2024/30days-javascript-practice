@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Unreal Webcam Fun</title>
+<style>
+  :root{
+    --bg:#0f1720;
+    --panel:#0b1220;
+    --accent:#7c3aed;
+    --muted:#93c5fd;
+    --glass: rgba(255,255,255,0.04);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;
+    background:linear-gradient(180deg,#071021 0%, #0f1720 100%);
+    color:#e6eef8;
+    padding:2rem;
+  }
+
+  .wrap{
+    width:100%;
+    max-width:1100px;
+    display:grid;
+    grid-template-columns: 1fr 380px;
+    gap:2rem;
+    align-items:start;
+  }
+
+  .stage{
+    background:var(--panel);
+    border-radius:14px;
+    padding:12px;
+    box-shadow: 0 6px 30px rgba(3,7,18,0.6);
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    min-height:480px;
+    align-items:center;
+  }
+
+  .video-frame{
+    width:100%;
+    background:#000;
+    border-radius:10px;
+    overflow:hidden;
+    position:relative;
+    aspect-ratio:16/9;
+  }
+
+  video, canvas{
+    width:100%;
+    height:100%;
+    display:block;
+    object-fit:cover;
+  }
+
+  .controls{
+    display:flex;
+    gap:.6rem;
+    flex-wrap:wrap;
+  }
+
+  button, select {
+    background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.1));
+    color:var(--muted);
+    border:1px solid rgba(255,255,255,0.03);
+    padding:.6rem .9rem;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:600;
+  }
+
+  button:active{transform:translateY(1px)}
+  .muted { color:#9fb7d6; font-weight:600; }
+
+  .sidebar{
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.07));
+    border-radius:12px;
+    padding:14px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    min-height:480px;
+  }
+
+  h2{ margin:0 0 .3rem 0; font-size:1.05rem; color:var(--muted) }
+  label{ font-size:0.9rem; display:block; color:#cfe8ff; margin-bottom:4px }
+  .row{ display:flex; gap:.6rem; align-items:center }
+
+  input[type=range]{
+    width:100%;
+    accent-color:var(--accent);
+  }
+  .small{ font-size:.85rem; color:#9fb7d6; }
+
+  .effects-list{ display:flex; gap:.5rem; flex-wrap:wrap; }
+
+  .effect-chip{
+    padding:.4rem .6rem;
+    border-radius:8px;
+    background:var(--glass);
+    border:1px solid rgba(255,255,255,0.04);
+    cursor:pointer;
+    color:#d7e9ff;
+    font-weight:600;
+  }
+  .effect-chip.active{
+    background:linear-gradient(90deg,var(--accent), #06b6d4);
+    color:#041124;
+    box-shadow:0 6px 18px rgba(124,58,237,0.18);
+  }
+
+  .note{ font-size:.85rem; color:#8fb7d7 }
+
+  .footer{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+  }
+
+  .status{
+    font-size:.85rem;
+    color:#9fb7d6;
+  }
+
+  /* small screens */
+  @media (max-width:980px){
+    .wrap{ grid-template-columns: 1fr; }
+    .sidebar{ order:2 }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="stage">
+    <div class="video-frame" id="frame">
+      <!-- We'll draw either the video element directly or into the canvas for pixel effects -->
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas" style="display:none"></canvas>
+    </div>
+
+    <div class="controls" id="main-controls">
+      <button id="playPause">Pause</button>
+      <button id="snapshot">📸 Snapshot</button>
+      <button id="download" disabled>⬇️ Download</button>
+      <button id="toggleMirror">Mirror</button>
+      <select id="renderMode" title="render-mode">
+        <option value="css">CSS Filters (fast)</option>
+        <option value="canvas">Canvas Pixel Effects</option>
+      </select>
+    </div>
+
+    <div class="footer">
+      <div class="status" id="status">Initializing camera…</div>
+      <div class="note">Tip: Grant camera access, then choose an effect</div>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <h2>Effects & Controls</h2>
+
+    <div>
+      <label class="small">Quick Effects (click)</label>
+      <div class="effects-list" id="effectsList">
+        <div class="effect-chip" data-effect="none">None</div>
+        <div class="effect-chip" data-effect="grayscale">Grayscale</div>
+        <div class="effect-chip" data-effect="sepia">Sepia</div>
+        <div class="effect-chip" data-effect="invert">Invert</div>
+        <div class="effect-chip" data-effect="blur">Blur</div>
+        <div class="effect-chip" data-effect="pixelate">Pixelate</div>
+        <div class="effect-chip" data-effect="rgbSplit">RGB Split</div>
+        <div class="effect-chip" data-effect="glitch">Glitch</div>
+      </div>
+    </div>
+
+    <div>
+      <label>CSS Filters (when CSS mode)</label>
+      <div class="row">
+        <span class="small">Brightness</span>
+        <input id="brightness" type="range" min="0.2" max="2" step="0.05" value="1">
+      </div>
+      <div class="row">
+        <span class="small">Contrast</span>
+        <input id="contrast" type="range" min="0.2" max="2" step="0.05" value="1">
+      </div>
+      <div class="row">
+        <span class="small">Saturation</span>
+        <input id="saturate" type="range" min="0" max="2" step="0.05" value="1">
+      </div>
+    </div>
+
+    <div>
+      <label>Canvas Effects Controls</label>
+      <div class="row">
+        <span class="small">Pixel Size</span>
+        <input id="pixelSize" type="range" min="2" max="40" step="1" value="10">
+      </div>
+      <div class="row">
+        <span class="small">Glitch Intensity</span>
+        <input id="glitchIntensity" type="range" min="0" max="1" step="0.05" value="0.25">
+      </div>
+    </div>
+
+    <div>
+      <h2>About</h2>
+      <p class="note">This demo shows both fast CSS filters and slower, but more creative, canvas pixel processing. Use canvas mode for RGB-split, pixelation, and glitch effects.</p>
+    </div>
+  </aside>
+</div>
+
+<script>
+  // ====== Elements & state ======
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const frame = document.getElementById('frame');
+  const statusEl = document.getElementById('status');
+
+  const playPauseBtn = document.getElementById('playPause');
+  const snapshotBtn = document.getElementById('snapshot');
+  const downloadBtn = document.getElementById('download');
+  const toggleMirrorBtn = document.getElementById('toggleMirror');
+  const renderSelect = document.getElementById('renderMode');
+
+  const effectsList = document.getElementById('effectsList');
+  const effectChips = document.querySelectorAll('.effect-chip');
+
+  const brightness = document.getElementById('brightness');
+  const contrast = document.getElementById('contrast');
+  const saturate = document.getElementById('saturate');
+
+  const pixelSize = document.getElementById('pixelSize');
+  const glitchIntensity = document.getElementById('glitchIntensity');
+
+  let stream = null;
+  let animFrame = null;
+  let mirror = false;
+  let playing = true;
+  let activeEffect = 'none';
+  let renderMode = 'css'; // 'css' or 'canvas'
+
+  // Canvas context
+  const ctx = canvas.getContext('2d');
+
+  // ====== Start camera ======
+  async function startCamera(){
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width:1280, height:720 }, audio:false });
+      video.srcObject = stream;
+      await video.play();
+      statusEl.textContent = 'Camera active — choose an effect!';
+      downloadBtn.disabled = true;
+      adjustSizes();
+      if(renderMode === 'canvas'){
+        startCanvasLoop();
+      }
+    } catch (err){
+      statusEl.textContent = 'Camera access denied or unavailable.';
+      console.error('Camera error', err);
+    }
+  }
+
+  function adjustSizes(){
+    // Set canvas same size as video display
+    const rect = frame.getBoundingClientRect();
+    canvas.width = Math.round(rect.width);
+    canvas.height = Math.round(rect.height);
+  }
+
+  window.addEventListener('resize', () => {
+    adjustSizes();
+  });
+
+  // ====== Render loop for canvas processing ======
+  function startCanvasLoop(){
+    cancelAnimationFrame(animFrame);
+    // ensure canvas is visible only in canvas mode
+    canvas.style.display = 'block';
+    video.style.display = 'none';
+    adjustSizes();
+
+    function draw(){
+      // draw current video frame into an offscreen canvas sized to match video element
+      ctx.save();
+      ctx.scale(mirror ? -1 : 1, 1);
+      const drawX = mirror ? -canvas.width : 0;
+      ctx.drawImage(video, drawX, 0, canvas.width, canvas.height);
+      ctx.restore();
+
+      // get image data
+      let imageData = ctx.getImageData(0,0,canvas.width, canvas.height);
+      let data = imageData.data;
+
+      if(activeEffect === 'pixelate'){
+        applyPixelate(ctx, canvas, parseInt(pixelSize.value,10));
+      } else if(activeEffect === 'rgbSplit' || activeEffect === 'glitch'){
+        applyRgbSplit(data, canvas.width, canvas.height, activeEffect === 'glitch' ? parseFloat(glitchIntensity.value) : 0.6);
+        ctx.putImageData(imageData,0,0);
+      } else if(activeEffect === 'invert'){
+        for(let i=0;i<data.length;i+=4){
+          data[i] = 255 - data[i];
+          data[i+1] = 255 - data[i+1];
+          data[i+2] = 255 - data[i+2];
+        }
+        ctx.putImageData(imageData,0,0);
+      } else {
+        // none: leave as is (already drawn)
+      }
+
+      animFrame = requestAnimationFrame(draw);
+    }
+
+    draw();
+  }
+
+  function stopCanvasLoop(){
+    cancelAnimationFrame(animFrame);
+    canvas.style.display = 'none';
+    video.style.display = 'block';
+  }
+
+  // ====== Effects implementations ======
+  // Pixelate effect - it redraws scaled blocks
+  function applyPixelate(ctx, canvasEl, size){
+    const w = canvasEl.width;
+    const h = canvasEl.height;
+
+    // Read the current pixel frame
+    const img = ctx.getImageData(0,0,w,h);
+    // We'll make a temporary canvas to paint blocks
+    ctx.clearRect(0,0,w,h);
+
+    for(let y=0; y<h; y+=size){
+      for(let x=0; x<w; x+=size){
+        // sample center color
+        const px = ((Math.floor(y + size/2) * w) + Math.floor(x + size/2)) * 4;
+        const r = img.data[px];
+        const g = img.data[px+1];
+        const b = img.data[px+2];
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(x,y,size,size);
+      }
+    }
+  }
+
+  // Simple RGB split pixel manip - shifts color channels
+  function applyRgbSplit(data, w, h, amt){
+    // amt: 0..1 scales shift amount
+    const maxShift = Math.round(40 * amt);
+    const w4 = w*4;
+    const copy = new Uint8ClampedArray(data); // copy original pixels
+    const shiftR = Math.round(maxShift * (Math.random()*0.6 + 0.4));
+    const shiftG = Math.round(maxShift * (Math.random()*0.6 + 0.4));
+    const shiftB = Math.round(maxShift * (Math.random()*0.6 + 0.4));
+
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        const i = (y*w + x)*4;
+        // map channel from offset positions (wrap around)
+        const rx = Math.max(0, Math.min(w-1, x + shiftR));
+        const gx = Math.max(0, Math.min(w-1, x - shiftG));
+        const bx = Math.max(0, Math.min(w-1, x + shiftB));
+
+        const rIdx = (y*w + rx)*4;
+        const gIdx = (y*w + gx)*4;
+        const bIdx = (y*w + bx)*4;
+
+        data[i]   = copy[rIdx];
+        data[i+1] = copy[gIdx+1];
+        data[i+2] = copy[bIdx+2];
+
+        // alpha left unchanged
+      }
+    }
+  }
+
+  // ====== UI: play/pause ======
+  playPauseBtn.addEventListener('click', () => {
+    if(!video.srcObject) return;
+    if(video.paused){
+      video.play();
+      playPauseBtn.textContent = 'Pause';
+      if(renderMode==='canvas') startCanvasLoop();
+    } else {
+      video.pause();
+      playPauseBtn.textContent = 'Play';
+      cancelAnimationFrame(animFrame);
+    }
+  });
+
+  // ====== snapshot and download ======
+  snapshotBtn.addEventListener('click', () => {
+    // draw current display (if canvas mode, canvas already holds processed pixels)
+    if(renderMode === 'canvas'){
+      // canvas already has content
+      downloadBtn.disabled = false;
+      statusEl.textContent = 'Snapshot ready — click Download to save.';
+    } else {
+      // copy from video to canvas quickly using CSS filters applied to the video
+      adjustSizes();
+      canvas.style.display = 'block';
+      video.style.display = 'none';
+      // draw with same CSS filters applied (we'll apply CSS filters via an offscreen context by drawing video directly; CSS filters won't affect canvas drawImage)
+      // So for CSS mode we just draw the raw frame (if you need filters baked into snapshot, we would need to apply the same filter transforms to canvas pixels)
+      ctx.save();
+      ctx.scale(mirror ? -1 : 1, 1);
+      const dx = mirror ? -canvas.width : 0;
+      ctx.drawImage(video, dx, 0, canvas.width, canvas.height);
+      ctx.restore();
+      downloadBtn.disabled = false;
+      statusEl.textContent = 'Snapshot ready — click Download to save.';
+      // show canvas for a moment, then hide back after snapshot taken
+      setTimeout(() => {
+        canvas.style.display = 'none';
+        video.style.display = 'block';
+      }, 4000);
+    }
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const link = document.createElement('a');
+    // ensure canvas has up-to-date content. If canvas mode, it's ready. If CSS mode we drew a snapshot earlier.
+    const dataURL = canvas.toDataURL('image/png');
+    link.href = dataURL;
+    link.download = `webcam-snapshot-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    statusEl.textContent = 'Downloaded snapshot.';
+  });
+
+  // ====== Mirror toggle ======
+  toggleMirrorBtn.addEventListener('click', () => {
+    mirror = !mirror;
+    if(renderMode === 'css'){
+      video.style.transform = mirror ? 'scaleX(-1)' : 'scaleX(1)';
+    } else {
+      // canvas loop will use mirror flag
+    }
+  });
+
+  // ====== Mode switch (css vs canvas) ======
+  renderSelect.addEventListener('change', (e) => {
+    renderMode = e.target.value;
+    if(renderMode === 'canvas'){
+      // hide video element, start canvas processing
+      startCanvasLoop();
+    } else {
+      // stop canvas and use CSS filters on video
+      stopCanvasLoop();
+      applyCssFilters();
+    }
+  });
+
+  // ====== Effect chips ======
+  effectChips.forEach(chip=>{
+    chip.addEventListener('click', () => {
+      effectChips.forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      activeEffect = chip.dataset.effect;
+      if(renderMode === 'canvas'){
+        // canvas loop will pick up activeEffect automatically
+        if(activeEffect === 'pixelate' || activeEffect === 'rgbSplit' || activeEffect === 'glitch' || activeEffect === 'invert'){
+          // ensure canvas loop actively running
+          startCanvasLoop();
+        } else {
+          // none: leave canvas showing raw frames
+        }
+      } else {
+        // apply CSS filters to video
+        applyCssFilters();
+      }
+    });
+  });
+
+  // ====== CSS filters UI ======
+  function applyCssFilters(){
+    if(renderMode !== 'css') return;
+    let f = '';
+    // handle quick effect chips that map to css filters
+    if(activeEffect === 'grayscale') f += 'grayscale(1) ';
+    if(activeEffect === 'sepia') f += 'sepia(0.8) ';
+    if(activeEffect === 'invert') f += 'invert(1) ';
+    if(activeEffect === 'blur') f += 'blur(4px) ';
+    // add sliders
+    f += `brightness(${brightness.value}) contrast(${contrast.value}) saturate(${saturate.value})`;
+    video.style.filter = f;
+  }
+
+  [brightness, contrast, saturate].forEach(input => {
+    input.addEventListener('input', () => {
+      if(renderMode === 'css'){
+        applyCssFilters();
+      }
+    });
+  });
+
+  // ====== canvas controls ======
+  pixelSize.addEventListener('input', () => {
+    // pixelate uses this value
+  });
+  glitchIntensity.addEventListener('input', () => {
+    // used by rgb split/glitch
+  });
+
+  // ====== initialize ======
+  startCamera();
+
+  // mark default 'none' chip as active
+  document.querySelector('.effect-chip[data-effect="none"]').classList.add('active');
+
+  // Ensure clean stop when page is hidden
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden){
+      cancelAnimationFrame(animFrame);
+    } else if(renderMode === 'canvas'){
+      startCanvasLoop();
+    }
+  });
+
+  
+</script>
+
+</body>
+</html>

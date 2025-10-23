@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🎙️ Speech Detection App</title>
+<style>
+  body {
+    font-family: "Poppins", sans-serif;
+    background: linear-gradient(135deg, #1e1e2f, #25254b);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .speech-box {
+    width: 90%;
+    max-width: 700px;
+    min-height: 250px;
+    border-radius: 15px;
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    overflow-y: auto;
+    font-size: 1.2rem;
+    line-height: 1.6;
+  }
+
+  .controls {
+    margin-top: 2rem;
+    display: flex;
+    gap: 1rem;
+  }
+
+  button {
+    background: #00c6ff;
+    background: linear-gradient(90deg, #0072ff, #00c6ff);
+    color: #fff;
+    border: none;
+    padding: 0.8rem 1.6rem;
+    font-size: 1rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 600;
+  }
+
+  button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 20px rgba(0, 198, 255, 0.4);
+  }
+
+  .listening {
+    border: 2px solid #00ff99;
+    box-shadow: 0 0 15px #00ff99;
+  }
+
+  .status {
+    margin-top: 1rem;
+    font-size: 1rem;
+    color: #ccc;
+  }
+</style>
+</head>
+<body>
+  <h1>🎙️ Speech Detection App</h1>
+  <div class="speech-box" id="speechBox">Click “Start Listening” and speak…</div>
+
+  <div class="controls">
+    <button id="startBtn">Start Listening</button>
+    <button id="stopBtn">Stop Listening</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+
+  <p class="status" id="status">Status: Idle 💤</p>
+
+  <script>
+    // ✅ Initialize Speech Recognition
+    window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!window.SpeechRecognition) {
+      alert("Your browser does not support Speech Recognition. Please use Chrome or Edge.");
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.interimResults = true; // shows real-time words before final
+    recognition.continuous = true; // keeps listening
+
+    const speechBox = document.getElementById("speechBox");
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const status = document.getElementById("status");
+
+    let isListening = false;
+
+    // 🎧 When recognition gets results
+    recognition.addEventListener("result", (e) => {
+      const transcript = Array.from(e.results)
+        .map(result => result[0])
+        .map(result => result.transcript)
+        .join("");
+
+      speechBox.textContent = transcript;
+    });
+
+    // 🟢 Start Listening
+    startBtn.addEventListener("click", () => {
+      if (!isListening) {
+        recognition.start();
+        isListening = true;
+        status.textContent = "Status: Listening 🎤 (Speak now)";
+        speechBox.classList.add("listening");
+      }
+    });
+
+    // 🔴 Stop Listening
+    stopBtn.addEventListener("click", () => {
+      recognition.stop();
+      isListening = false;
+      status.textContent = "Status: Stopped ⏹️";
+      speechBox.classList.remove("listening");
+    });
+
+    // 🧹 Clear text
+    clearBtn.addEventListener("click", () => {
+      speechBox.textContent = "";
+    });
+
+    // Auto-restart when recognition stops unexpectedly
+    recognition.addEventListener("end", () => {
+      if (isListening) {
+        recognition.start();
+      }
+    });
+  </script>
+</body>
+</html>
